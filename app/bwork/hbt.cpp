@@ -311,10 +311,10 @@ void Hbt::httpReq()
             heartBeatCount = 1;
             char * cmd = new char[200];
             memset(cmd,0,200);
-            if (zoom != 1)
+        //    if (zoom != 1)
             {
                 sprintf(cmd,"AutoFocus -Z %d",zoom);
-                printf("cmd is %s\n", cmd);
+                printf("--------------------------------------------test test ++++++++++++++++++++++++++++++++++++++++++++++++cmd is %s\n", cmd);
                 writeToFile(cmd,strlen(cmd),2);
                 sleep(8);
             }
@@ -323,13 +323,37 @@ void Hbt::httpReq()
             writeToFile(cmd,strlen(cmd),2);
             sleep(2);
             memset(cmd,0,200);
+            //判断截图是否成功
+            int snapshot_exist = 1;           
+            snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+            //printf("access is %d\n", snapshot_exist);
+            if(snapshot_exist == -1)
+            {
+                sprintf(cmd,"CmdSnapShot 1920 1080 80");
+                writeToFile(cmd,strlen(cmd),2);
+                sleep(2);               
+                memset(cmd,0,200);            
+            }
             //http://slv:1936/svr/box.php?act=g&bid=123456001&pre=1 pre:预置点序号0~19
             //curl -F 'dat=@0.jpg' 'http://box.carvedge.com/svr/box.php?act=gpm&bid=123456001&pre=1'
             sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=%d'", _sip.c_str(),_bid.c_str(),zoom-1);
             printf("cmd is %s\n",cmd);
             writeToFile(cmd,strlen(cmd),2);
             free(cmd);
-            sleep(2);
+            sleep(5);
+             snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+            printf("access is %d\n", snapshot_exist);
+            //int fremove = remove("/tmp/snapshot.jpg");
+            while(access("/tmp/snapshot.jpg",F_OK) == 0)
+            {
+                remove("/tmp/snapshot.jpg");
+                snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+                printf("access is %d\n", snapshot_exist);
+                sleep(1);
+                if(access("/tmp/snapshot.jpg",F_OK) != 0)
+                    break;
+            }
+            //printf("fremove is %d\n", fremove);
         }
         if (1 == resetToDefaultZoom)
         {
