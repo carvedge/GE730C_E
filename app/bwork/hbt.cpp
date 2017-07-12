@@ -25,6 +25,7 @@ Hbt::Hbt(boost::asio::io_service& io_service)
     resloved_mip = 0;
     vidState = 0;
     heartBeatCount = 0;
+    zoom_is_work = false;
       //LOG("start 0");
     UARTSendData(1);//获得时间
 }
@@ -251,7 +252,7 @@ void Hbt::httpReq()
     vector<string> vStr;
     boost::split( vStr, reply_, boost::is_any_of( "," ), boost::token_compress_on);
     //sip,视频开关，截图，电源数据，版本，时间戳
-    if (vStr.size()<6)
+    if (vStr.size()<7)
     {
         return;
     }
@@ -307,6 +308,7 @@ void Hbt::httpReq()
             {
                 continue;
             }
+            zoom_is_work = true;
             resetToDefaultZoom = 1;
             heartBeatCount = 1;
             char * cmd = new char[200];
@@ -336,7 +338,7 @@ void Hbt::httpReq()
             }
             //http://slv:1936/svr/box.php?act=g&bid=123456001&pre=1 pre:预置点序号0~19
             //curl -F 'dat=@0.jpg' 'http://box.carvedge.com/svr/box.php?act=gpm&bid=123456001&pre=1'
-            sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=%d'", _sip.c_str(),_bid.c_str(),zoom-1);
+            sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=%d&flg=0'", _sip.c_str(),_bid.c_str(),zoom-1);
             printf("cmd is %s\n",cmd);
             writeToFile(cmd,strlen(cmd),2);
             free(cmd);
@@ -354,6 +356,10 @@ void Hbt::httpReq()
                     break;
             }
             //printf("fremove is %d\n", fremove);
+            if(iter==(vPtz.end()-1))
+            {
+            	zoom_is_work = false;
+            }
         }
         if (1 == resetToDefaultZoom)
         {
@@ -363,7 +369,6 @@ void Hbt::httpReq()
             free(cmd);
         }
     }
-
     
     /*int status=0;
     try  
@@ -419,10 +424,190 @@ void Hbt::httpReq()
             //setSystemTime(cctime);
         }
     }
+    //处理一键巡视
+     if (vStr[6].length() != 0)
+    {
+        vector<string> vPtz;
+        printf("zoom_is_work is%d.\n",zoom_is_work);
+        boost::split( vPtz, vStr[6], boost::is_any_of( "|" ), boost::token_compress_on);
+        for (vector<string>::iterator iter=vPtz.begin();iter!=vPtz.end();++iter)
+        {
+            int cmd_y  = boost::lexical_cast<int>(*iter);
+            printf("cmd_y is %d\n", cmd_y);
+            if (cmd_y == 0)
+            {
+                break;
+            }
+            else if((cmd_y == 8)&&(zoom_is_work ==false))
+            {
+                Hbt::httpReq_y();
+            }
+        }
+    }
     //LOG("httpReq end response is %s\n",reply_.c_str());
-    socket.close();
-   
+    printf("httpReq_heartbeat close.\n");
+    socket.close();   
 }
+void Hbt::httpReq_y()
+{
+	printf("httpReq_y start.\n");
+    if(resloved_mip == 0){
+        try {
+            tcp::resolver resolver(io_service_);
+            tcp::resolver::query query(server_, port_);
+            endpoint_iterator_mip = resolver.resolve(query);
+        }
+        catch (boost::system::system_error& e) {
+            std::cout <<e.what()<<"\n"; 
+             
+            return;
+        }
+    }
+    resloved_mip = 1;
+    tcp::socket socket(io_service_);
+
+    boost::system::error_code ec = boost::asio::error::host_not_found;
+    tcp::resolver::iterator iterator = endpoint_iterator_mip;
+    tcp::resolver::iterator end;
+    while(ec && iterator != end) {
+        printf("connect iterator ,ec is %s\n", ec.message().c_str());
+        socket.close();
+        socket.connect(*iterator++, ec);
+    }
+    if(ec){
+        return;
+    }
+    printf("httpReq_y start.\n");
+    std::ostringstream stringStream;
+    //http://ivs2.carvedge.com/svr/box.php?act=y&bid=01230021704100009
+   // http://".$mip."/svr/box.php?act=hbt&bid=".$bid."&vsn=".$_vsn
+    
+   
+    stringStream <<"/svr/box.php?act=y&bid="<<_bid;
+
+    
+    path_ = stringStream.str();
+   
+    cout<<path_<<endl;
+    
+    boost::asio::streambuf request;
+    std::ostream request_stream(&request);
+    request_stream << "GET " << path_ << " HTTP/1.0\r\n";
+    request_stream << "Host: " << server_ << "\r\n";
+    request_stream << "Accept: */*\r\n";
+    request_stream << "Connection: close\r\n\r\n";
+
+    boost::asio::write(socket, request,ec);
+    if( ec ){
+        cout<<222<<endl;
+        return;
+    }
+
+    boost::asio::streambuf response;
+    boost::asio::read_until(socket, response, "\r\n",ec);
+     if( ec ){
+         return;
+    }
+    std::istream response_stream(&response);
+    std::string http_version;
+    response_stream >> http_version;
+    unsigned int status_code;
+    response_stream >> status_code;
+    std::string status_message;
+    std::getline(response_stream, status_message);
+    if (!response_stream || http_version.substr(0, 5) != "HTTP/")
+    {
+        std::cout << "Invalid response\n";
+        return ;
+    }
+    if (status_code != 200)
+    {
+        std::cout << "Response returned with status code " << status_code << "\n";
+        return ;
+    }
+    // Read the response headers, which are terminated by a blank line.
+    boost::asio::read_until(socket, response, "\r\n\r\n",ec);
+     if( ec ){
+         return;
+    }
+    //Process the response headers.
+    std::string header;
+    while (std::getline(response_stream, header) && header != "\r");
+    //the heart-beat reply.
+    std::string reply_;
+    std::getline(response_stream ,reply_);
+
+    while(boost::asio::read(socket, response, boost::asio::transfer_at_least(1), ec));
+
+/* **************************************************************
+ * heart-beat parser
+ * ************************************************************** */
+    printf("==httpReq_y_reply is %s \n",reply_.c_str());
+    vector<string> vPtz;
+    boost::split( vPtz, reply_, boost::is_any_of( "," ), boost::token_compress_on);
+    int resetToDefaultZoom = 0;
+    for (vector<string>::iterator iter=vPtz.begin();iter!=vPtz.end();++iter)
+    {
+        int zoom_y  = boost::lexical_cast<int>(*iter);
+        printf("zoom_y is %d\n", zoom_y);
+        resetToDefaultZoom = 1;
+        heartBeatCount = 1;
+        char * cmd = new char[200];
+        memset(cmd,0,200);
+    //    if (zoom != 1)
+        {
+            sprintf(cmd,"AutoFocus -Z %d",zoom_y);
+            printf("--------------------------------------------test test ++++++++++++++++++++++++++++++++++++++++++++++++cmd is %s\n", cmd);
+            writeToFile(cmd,strlen(cmd),2);
+            sleep(8);
+        }
+        memset(cmd,0,200);
+        sprintf(cmd,"CmdSnapShot 1920 1080 80");
+        writeToFile(cmd,strlen(cmd),2);
+        sleep(2);
+        memset(cmd,0,200);
+        //判断截图是否成功
+        int snapshot_exist = 1;           
+        snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+        //printf("access is %d\n", snapshot_exist);
+        if(snapshot_exist == -1)
+        {
+            sprintf(cmd,"CmdSnapShot 1920 1080 80");
+            writeToFile(cmd,strlen(cmd),2);
+            sleep(2);               
+            memset(cmd,0,200);            
+        }
+        //http://slv:1936/svr/box.php?act=g&bid=123456001&pre=1 pre:预置点序号0~19
+        //curl -F 'dat=@0.jpg' 'http://box.carvedge.com/svr/box.php?act=gpm&bid=123456001&pre=1'
+        sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=%d&flg=1'", _sip.c_str(),_bid.c_str(),zoom_y-1);
+        printf("cmd is %s\n",cmd);
+        writeToFile(cmd,strlen(cmd),2);
+        free(cmd);
+        sleep(5);
+        snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+        printf("access is %d\n", snapshot_exist);
+        //int fremove = remove("/tmp/snapshot.jpg");
+        while(access("/tmp/snapshot.jpg",F_OK) == 0)
+        {
+            remove("/tmp/snapshot.jpg");
+            snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+            printf("access is %d\n", snapshot_exist);
+            sleep(1);
+            if(access("/tmp/snapshot.jpg",F_OK) != 0)
+                break;         
+        }
+        //printf("fremove is %d\n", fremove);
+    }
+    if (1 == resetToDefaultZoom)     
+    {
+        char * cmd = new char[200];
+        sprintf(cmd,"AutoFocus -Z 1");
+        writeToFile(cmd,strlen(cmd),2);
+        free(cmd);
+    }
+    socket.close();
+}
+
 void Hbt::httpNotifyClose(){
     //LOG("httpReq 0");
     /* ******************************************************** */

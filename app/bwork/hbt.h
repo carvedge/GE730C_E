@@ -20,6 +20,7 @@ public:
     Hbt(boost::asio::io_service& io_service);
     void start(const std::string& server,const std::string& port);
     void httpReq();
+    void httpReq_y();//一键巡视请求
     /**
     *通知服务器关闭了机芯
     */
@@ -46,6 +47,7 @@ private:
     bool isConnected;//是否已经连上网络
 
     bool _UARTConfig;//是否已经配置过单片机
+    bool zoom_is_work;//一键巡视是否在控机芯
 private:
     int heartBeatCount;//如果不看视频，并且heartBeatCount>5 则不发送心跳
     
