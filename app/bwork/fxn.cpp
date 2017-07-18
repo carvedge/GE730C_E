@@ -5,6 +5,7 @@ string _bid;
 string _sip;
 int _vsn;
 int vidState;//0:关闭 1:开启
+int capture_work = 0;//1 正在进行截图，如果在巡视，退出巡视；0 没有在截图；
 bs * _client = NULL;
 Hbt* _hbt    = NULL;
  

@@ -304,6 +304,8 @@ void Hbt::httpReq()
         {
             int zoom  = boost::lexical_cast<int>(*iter);
             printf("zoom is %d\n", zoom);
+            if(capture_work == 1)
+                break;
             if (zoom == 0)
             {
                 continue;
@@ -346,15 +348,17 @@ void Hbt::httpReq()
              snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
             printf("access is %d\n", snapshot_exist);
             //int fremove = remove("/tmp/snapshot.jpg");
-            while(access("/tmp/snapshot.jpg",F_OK) == 0)
+            int remove_count = 0;
+            while((access("/tmp/snapshot.jpg",F_OK) == 0)&&(remove_count <3))
             {
                 remove("/tmp/snapshot.jpg");
                 snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
                 printf("access is %d\n", snapshot_exist);
                 sleep(1);
+                remove_count++;
                 if(access("/tmp/snapshot.jpg",F_OK) != 0)
-                    break;
-            }
+                    break;         
+      }
             //printf("fremove is %d\n", fremove);
             if(iter==(vPtz.end()-1))
             {
@@ -548,6 +552,8 @@ void Hbt::httpReq_y()
     int resetToDefaultZoom = 0;
     for (vector<string>::iterator iter=vPtz.begin();iter!=vPtz.end();++iter)
     {
+        if(capture_work == 1)
+                break;
         int zoom_y  = boost::lexical_cast<int>(*iter);
         printf("zoom_y is %d\n", zoom_y);
         resetToDefaultZoom = 1;

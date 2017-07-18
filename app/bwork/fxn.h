@@ -21,6 +21,8 @@ extern bs * _client;
 extern Hbt* _hbt;
 extern int vidState;//0:关闭 1:开启
 
+extern int capture_work;//1 正在进行截图，如果在巡视，退出巡视；0 没有在截图；
+
 /**
 *type : 1 /opt/app/ram/1.txt
 *type : 2 /opt/app/ram/2.txt

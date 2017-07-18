@@ -290,7 +290,35 @@ void bs::parseDetail(unsigned char*data,size_t length){
       toPresets(pre);
      // free(key);
    }
-
+   else if(Frame_Type[0] == 0x23){
+      printf("capture\n");
+      capture_work = 1;//正在进行截图
+      char * cmd = new char[200];
+      int snapshot_exist = 1;           
+      sprintf(cmd,"CmdSnapShot 1920 1080 80");
+      writeToFile(cmd,strlen(cmd),2);
+      sleep(2);               
+      memset(cmd,0,200);            
+      sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=c&bid=%s'", _sip.c_str(),_bid.c_str());
+      printf("cmd is %s\n",cmd);
+      writeToFile(cmd,strlen(cmd),2);
+      free(cmd);
+      sleep(5);
+      snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+      printf("access is %d\n", snapshot_exist);
+      int remove_count = 0;
+      while((access("/tmp/snapshot.jpg",F_OK) == 0)&&(remove_count <3))
+      {
+          remove("/tmp/snapshot.jpg");
+          snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+          printf("access is %d\n", snapshot_exist);
+          sleep(1);
+          remove_count++;
+          if(access("/tmp/snapshot.jpg",F_OK) != 0)
+              break;         
+      }
+      capture_work = 0;//截图结束
+   }
 
 }
 void bs::sendData(unsigned char Frame_Type){
