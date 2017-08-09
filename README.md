@@ -32,3 +32,5 @@ V2.6.0.170718_release_h
 	capture_work = 0表示截图工作结束。
 
 2. 在巡视功能中while循环删除图片的循环条件中增加删除次数判断remove_count,执行到一定次数就退出循环，防止程序进入死循环。
+
+yaoyanliang_work
