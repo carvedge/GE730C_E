@@ -21,6 +21,9 @@ public:
     void start(const std::string& server,const std::string& port);
     void httpReq();
     void httpReq_y();//一键巡视请求
+	void capture_d();//定时巡视处理
+	void y_handle_timeout(const boost::system::error_code& err);
+	void d_handle_timeout(const boost::system::error_code& err);
     /**
     *通知服务器关闭了机芯
     */
@@ -31,6 +34,9 @@ private:
     void handle_timeout(const boost::system::error_code& err);
     boost::asio::io_service & io_service_;  
     boost::asio::deadline_timer timer_;
+	boost::asio::deadline_timer y_timer_;
+	boost::asio::deadline_timer d_timer_;
+	
     std::string server_;
     std::string path_;
     std::string port_;
@@ -47,7 +53,8 @@ private:
     bool isConnected;//是否已经连上网络
 
     bool _UARTConfig;//是否已经配置过单片机
-    bool zoom_is_work;//一键巡视是否在控机芯
+	bool zoom_cmd_true;//定时巡视命令是否存在
+    //bool zoom_is_work;//一键巡视是否在控机芯
 private:
     int heartBeatCount;//如果不看视频，并且heartBeatCount>5 则不发送心跳
     

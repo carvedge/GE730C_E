@@ -6,6 +6,10 @@
 #include "SeriaData.h"
 #include "fxn.h"
 
+string pm1_id;
+int zoom_cmd[20] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+bool zoom_cmd_true = false;
+
 extern "C"{
     #include <sys/vfs.h>
     #include "timeUtil.h"
@@ -17,17 +21,60 @@ using boost::lexical_cast;
 using boost::bad_lexical_cast; 
 Hbt::Hbt(boost::asio::io_service& io_service)
          :io_service_( io_service ),
-          timer_(io_service)
+          timer_(io_service),
+		  y_timer_(io_service),
+		  d_timer_(io_service)
 {
     lastInterval = 0;
     _UARTConfig = false;
     resloved_sip = 0;
     resloved_mip = 0;
     vidState = 0;
-    heartBeatCount = 0;
-    zoom_is_work = false;
+    heartBeatCount = 0;	
       //LOG("start 0");
     UARTSendData(1);//获得时间
+}
+
+void Hbt::y_handle_timeout(const boost::system::error_code& err)
+{
+	if (err)  
+    {  
+        std::cout << "time error: " << err.message() << "\n";
+    } 
+	else
+	{
+		if(zoom_is_work == 0)
+		{
+			boost::function0<void>z=boost::bind(&Hbt::httpReq_y,this);
+            boost::thread thrd(z);
+		}
+		else
+		{
+			y_timer_.expires_from_now(boost::posix_time::milliseconds(1000));
+			y_timer_.async_wait(boost::bind(&Hbt::y_handle_timeout, this,boost::asio::placeholders::error));
+		}
+	}
+}
+
+void Hbt::d_handle_timeout(const boost::system::error_code& err)
+{
+	if (err)  
+    {  
+        std::cout << "time error: " << err.message() << "\n";
+    } 
+	else
+	{
+		if(y_zoom_is_work == 0)
+		{
+			boost::function0<void>z=boost::bind(&Hbt::capture_d,this);
+            boost::thread thrd(z);
+		}
+		else
+		{
+			d_timer_.expires_from_now(boost::posix_time::milliseconds(1000));
+			d_timer_.async_wait(boost::bind(&Hbt::d_handle_timeout, this,boost::asio::placeholders::error));
+		}
+	}
 }
 
 void Hbt::start(const std::string& server, const std::string& port)
@@ -175,6 +222,8 @@ void Hbt::httpReq()
             printf("heartBeatCount is %d,and noNetWorkSaveImages\n",heartBeatCount);
             noNetWorkSaveImages();
         }
+		if(dialog_4g < 0)
+			vidState = 0;
          
        // //LOG("execXBeat connect failed,bid is %s,ec is %s\n",bid_,ec.message().c_str());
         return;
@@ -299,79 +348,26 @@ void Hbt::httpReq()
     {
         vector<string> vPtz;
         boost::split( vPtz, vStr[2], boost::is_any_of( "|" ), boost::token_compress_on);
-        int resetToDefaultZoom = 0;
+		int i = 0;
         for (vector<string>::iterator iter=vPtz.begin();iter!=vPtz.end();++iter)
         {
-            int zoom  = boost::lexical_cast<int>(*iter);
-            printf("zoom is %d\n", zoom);
-            if(capture_work == 1)
-                break;
-            if (zoom == 0)
-            {
-                continue;
-            }
-            zoom_is_work = true;
-            resetToDefaultZoom = 1;
-            heartBeatCount = 1;
-            char * cmd = new char[200];
-            memset(cmd,0,200);
-        //    if (zoom != 1)
-            {
-                sprintf(cmd,"AutoFocus -Z %d",zoom);
-                printf("--------------------------------------------test test ++++++++++++++++++++++++++++++++++++++++++++++++cmd is %s\n", cmd);
-                writeToFile(cmd,strlen(cmd),2);
-                sleep(8);
-            }
-            memset(cmd,0,200);
-            sprintf(cmd,"CmdSnapShot 1920 1080 80");
-            writeToFile(cmd,strlen(cmd),2);
-            sleep(2);
-            memset(cmd,0,200);
-            //判断截图是否成功
-            int snapshot_exist = 1;           
-            snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
-            //printf("access is %d\n", snapshot_exist);
-            if(snapshot_exist == -1)
-            {
-                sprintf(cmd,"CmdSnapShot 1920 1080 80");
-                writeToFile(cmd,strlen(cmd),2);
-                sleep(2);               
-                memset(cmd,0,200);            
-            }
-            //http://slv:1936/svr/box.php?act=g&bid=123456001&pre=1 pre:预置点序号0~19
-            //curl -F 'dat=@0.jpg' 'http://box.carvedge.com/svr/box.php?act=gpm&bid=123456001&pre=1'
-            sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=%d&flg=0'", _sip.c_str(),_bid.c_str(),zoom-1);
-            printf("cmd is %s\n",cmd);
-            writeToFile(cmd,strlen(cmd),2);
-            free(cmd);
-            sleep(5);
-             snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
-            printf("access is %d\n", snapshot_exist);
-            //int fremove = remove("/tmp/snapshot.jpg");
-            int remove_count = 0;
-            while((access("/tmp/snapshot.jpg",F_OK) == 0)&&(remove_count <3))
-            {
-                remove("/tmp/snapshot.jpg");
-                snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
-                printf("access is %d\n", snapshot_exist);
-                sleep(1);
-                remove_count++;
-                if(access("/tmp/snapshot.jpg",F_OK) != 0)
-                    break;         
-      }
-            //printf("fremove is %d\n", fremove);
-            if(iter==(vPtz.end()-1))
-            {
-            	zoom_is_work = false;
-            }
+            int zoom  = boost::lexical_cast<int>(*iter);	
+			if(zoom == 0)
+				continue;
+			if((zoom != 0) && (i < 20))			
+			{
+				zoom_cmd[i] = zoom;
+				zoom_cmd_true = true;
+				i++;
+			}			
         }
-        if (1 == resetToDefaultZoom)
-        {
-            char * cmd = new char[200];
-            sprintf(cmd,"AutoFocus -Z 1");
-            writeToFile(cmd,strlen(cmd),2);
-            free(cmd);
-        }
+		i = 0;
+		if(zoom_cmd_true == true)
+		{
+			zoom_cmd_true = false;
+			d_timer_.expires_from_now(boost::posix_time::milliseconds(1000));
+			d_timer_.async_wait(boost::bind(&Hbt::d_handle_timeout, this,boost::asio::placeholders::error));			
+		}
     }
     
     /*int status=0;
@@ -438,13 +434,15 @@ void Hbt::httpReq()
         {
             int cmd_y  = boost::lexical_cast<int>(*iter);
             printf("cmd_y is %d\n", cmd_y);
-            if (cmd_y == 0)
+            if((cmd_y == 0) || (capture_work == 1))
             {
                 break;
             }
-            else if((cmd_y == 8)&&(zoom_is_work ==false))
+            if(cmd_y == 8)
             {
-                Hbt::httpReq_y();
+				pm1_id = vPtz[1];
+                y_timer_.expires_from_now(boost::posix_time::milliseconds(1000));
+				y_timer_.async_wait(boost::bind(&Hbt::y_handle_timeout, this,boost::asio::placeholders::error));
             }
         }
     }
@@ -452,9 +450,90 @@ void Hbt::httpReq()
     printf("httpReq_heartbeat close.\n");
     socket.close();   
 }
-void Hbt::httpReq_y()
+
+void Hbt::capture_d()//定时巡视
 {
-	printf("httpReq_y start.\n");
+	int resetToDefaultZoom = 0;
+	for(int i = 0; i < 20; i++)
+	{
+		if(capture_work == 1)
+			break;
+		if(zoom_cmd[i] != 0)
+		{
+            printf("zoom is %d\n", zoom_cmd[i]);
+            zoom_is_work = 1;
+            resetToDefaultZoom = 1;
+            heartBeatCount = 1;
+            char * cmd = new char[200];
+            memset(cmd,0,200);
+        //    if (zoom != 1)
+            {
+                sprintf(cmd,"AutoFocus -Z %d",zoom_cmd[i]);
+                printf("--------------------------------------------test test ++++++++++++++++++++++++++++++++++++++++++++++++cmd is %s\n", cmd);
+                writeToFile(cmd,strlen(cmd),2);
+                sleep(8);
+            }
+            memset(cmd,0,200);
+            sprintf(cmd,"CmdSnapShot 1920 1080 80");
+            writeToFile(cmd,strlen(cmd),2);
+            sleep(2);
+            memset(cmd,0,200);
+            //判断截图是否成功
+            int snapshot_exist = 1;           
+            snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+            //printf("access is %d\n", snapshot_exist);
+            if(snapshot_exist == -1)
+            {
+                sprintf(cmd,"CmdSnapShot 1920 1080 80");
+                writeToFile(cmd,strlen(cmd),2);
+                sleep(2);               
+                memset(cmd,0,200);            
+            }
+            //http://slv:1936/svr/box.php?act=g&bid=123456001&pre=1 pre:预置点序号0~19
+            //curl -F 'dat=@0.jpg' 'http://box.carvedge.com/svr/box.php?act=gpm&bid=123456001&pre=1'
+            sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=%d&flg=0'", _sip.c_str(),_bid.c_str(),zoom_cmd[i]-1);
+            printf("cmd is %s\n",cmd);
+            writeToFile(cmd,strlen(cmd),2);
+            free(cmd);
+            sleep(5);
+             snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+            printf("access is %d\n", snapshot_exist);
+            //int fremove = remove("/tmp/snapshot.jpg");
+            int remove_count = 0;
+            while((access("/tmp/snapshot.jpg",F_OK) == 0)&&(remove_count <3))
+            {
+                remove("/tmp/snapshot.jpg");
+                snapshot_exist = access("/tmp/snapshot.jpg",F_OK);
+                printf("access is %d\n", snapshot_exist);
+                sleep(1);
+                remove_count++;
+                if(access("/tmp/snapshot.jpg",F_OK) != 0)
+                    break;         
+			}
+            //printf("fremove is %d\n", fremove);
+		}
+		else if(zoom_cmd[i] == 0)
+		{
+			break;
+		}
+	}
+	for(int j = 0; j < 20; j++)
+	{
+		zoom_cmd[j] = 0;
+	}
+	zoom_is_work = 0;
+	if (1 == resetToDefaultZoom)
+	{
+		char * cmd = new char[200];
+		sprintf(cmd,"AutoFocus -Z 1");
+		writeToFile(cmd,strlen(cmd),2);
+		free(cmd);
+	}
+}
+
+void Hbt::httpReq_y()
+{	
+	printf("httpReq_y start.\n");	
     if(resloved_mip == 0){
         try {
             tcp::resolver resolver(io_service_);
@@ -554,6 +633,7 @@ void Hbt::httpReq_y()
     {
         if(capture_work == 1)
                 break;
+		y_zoom_is_work = 1;
         int zoom_y  = boost::lexical_cast<int>(*iter);
         printf("zoom_y is %d\n", zoom_y);
         resetToDefaultZoom = 1;
@@ -585,7 +665,7 @@ void Hbt::httpReq_y()
         }
         //http://slv:1936/svr/box.php?act=g&bid=123456001&pre=1 pre:预置点序号0~19
         //curl -F 'dat=@0.jpg' 'http://box.carvedge.com/svr/box.php?act=gpm&bid=123456001&pre=1'
-        sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=%d&flg=1'", _sip.c_str(),_bid.c_str(),zoom_y-1);
+        sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/snapshot.jpg' 'http://%s:1936/svr/box.php?act=g&pm1=%s&bid=%s&pre=%d&flg=1'", _sip.c_str(), pm1_id.c_str(),_bid.c_str(),zoom_y-1);
         printf("cmd is %s\n",cmd);
         writeToFile(cmd,strlen(cmd),2);
         free(cmd);
@@ -604,6 +684,7 @@ void Hbt::httpReq_y()
         }
         //printf("fremove is %d\n", fremove);
     }
+	y_zoom_is_work = 0;
     if (1 == resetToDefaultZoom)     
     {
         char * cmd = new char[200];
@@ -838,6 +919,7 @@ void Hbt::handle_timeout(const boost::system::error_code& err)
         if (heartBeatCount++ < 5 || vidState == 1)
         {
             UARTSendData(4);
+			printf("\n --------------------sendData 4 ----------------- \n");
             boost::function0<void>f=boost::bind(&Hbt::httpReq,this);
             boost::thread thrd(f); 
         }

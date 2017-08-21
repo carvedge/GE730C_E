@@ -227,44 +227,47 @@ void bs::parseDetail(unsigned char*data,size_t length){
      sendData(0x14);
    }
    else if(Frame_Type[0] == 0x17){
-      unsigned char Control_Type[1]; 
-      memcpy(Control_Type, data+18, 1);
-      if (Control_Type[0] == 0x05)
-      {
-          //放大
-        
-        int zoom = getZoomValue();
-        printf("zoom is %d\n",zoom);
-        char * cmd = new char[100];
+	   if((capture_work == 0) && (zoom_is_work == 0) && (y_zoom_is_work == 0))
+	   {
+		  unsigned char Control_Type[1]; 
+		  memcpy(Control_Type, data+18, 1);
+		  if (Control_Type[0] == 0x05)
+		  {
+			  //放大
+			
+			int zoom = getZoomValue();
+			printf("zoom is %d\n",zoom);
+			char * cmd = new char[100];
 
 
-        if (++zoom > 20)
-        {
-          zoom = 20;
-        }
+			if (++zoom > 20)
+			{
+			  zoom = 20;
+			}
 
-        sprintf(cmd,"AutoFocus -Z %d",zoom);
+			sprintf(cmd,"AutoFocus -Z %d",zoom);
 
-        writeToFile(cmd,strlen(cmd),2);
-        free(cmd);
-        printf("zoom+,zoom is %d\n",zoom);
-        setZoomVaule(zoom);
-      }
-      else if(Control_Type[0] == 0x06){
-         //缩小
-        int zoom = getZoomValue();
-        char * cmd = new char[100];
-        --zoom;
-        if (zoom < 1)
-        {
-          zoom = 1;
-        }
-        sprintf(cmd,"AutoFocus -Z %d",zoom);
-        writeToFile(cmd,strlen(cmd),2);
-        free(cmd);
-        printf("zoom-,zoom is %d\n",zoom);
-        setZoomVaule(zoom);
-      }
+			writeToFile(cmd,strlen(cmd),2);
+			free(cmd);
+			printf("zoom+,zoom is %d\n",zoom);
+			setZoomVaule(zoom);
+		  }
+		  else if(Control_Type[0] == 0x06){
+			 //缩小
+			int zoom = getZoomValue();
+			char * cmd = new char[100];
+			--zoom;
+			if (zoom < 1)
+			{
+			  zoom = 1;
+			}
+			sprintf(cmd,"AutoFocus -Z %d",zoom);
+			writeToFile(cmd,strlen(cmd),2);
+			free(cmd);
+			printf("zoom-,zoom is %d\n",zoom);
+			setZoomVaule(zoom);
+		  }
+		}
    }
 
    else if(Frame_Type[0] == 0x19){
@@ -280,15 +283,18 @@ void bs::parseDetail(unsigned char*data,size_t length){
       
    }
    else if(Frame_Type[0] == 0x21){
-      //置预置位
-      unsigned char Control_Type[1]; 
-      memcpy(Control_Type, data+18, 1);
-      int pre = Control_Type[0]+1;
-      printf("set preset is %d\n",pre);
-      //char* key = (char*)malloc(10);
-     // sprintf(key,"cfg.n%02d",pre);
-      toPresets(pre);
-     // free(key);
+	   if((capture_work == 0) && (zoom_is_work == 0) && (y_zoom_is_work == 0))
+	   {
+		  //置预置位
+		  unsigned char Control_Type[1]; 
+		  memcpy(Control_Type, data+18, 1);
+		  int pre = Control_Type[0]+1;
+		  printf("set preset is %d\n",pre);
+		  //char* key = (char*)malloc(10);
+		 // sprintf(key,"cfg.n%02d",pre);
+		  toPresets(pre);
+		 // free(key);
+	   }
    }
    else if(Frame_Type[0] == 0x23){
       printf("capture\n");
