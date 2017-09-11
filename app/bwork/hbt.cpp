@@ -434,7 +434,7 @@ void Hbt::httpReq()
         {
             int cmd_y  = boost::lexical_cast<int>(*iter);
             printf("cmd_y is %d\n", cmd_y);
-            if((cmd_y == 0) || (capture_work == 1))
+            if((cmd_y == 0) || (capture_work == 1) || (djts_is_work == 1))
             {
                 break;
             }
@@ -446,6 +446,77 @@ void Hbt::httpReq()
             }
         }
     }
+	//处理对焦调试
+	if(vStr[7].length() != 0)
+	{
+		int djts = boost::lexical_cast<int>(vStr[7]);
+		printf("djts is %d.\n",djts);
+		//printf("djts_is_work is%d.\n",djts_is_work);
+		if((djts == 1)&&(djts_is_work == 0))
+		{
+			djts_is_work = 1;
+			printf("djts_is_work is%d.\n",djts_is_work);
+			int remove_count = 0;
+            while((access("/tmp/param/zoomfocuspos.info",F_OK) == 0)&&(remove_count <3))
+            {
+                remove("/tmp/param/zoomfocuspos.info");
+                printf("zoomfocuspos access is %d\n", access("/tmp/param/zoomfocuspos.info",F_OK));
+                sleep(1);
+                remove_count++;
+                if(access("/tmp/param/zoomfocuspos.info",F_OK) != 0)
+                    break;         
+			}
+			
+			char * cmd = new char[200];
+			sprintf(cmd,"AutoFocus -s");
+			writeToFile(cmd,strlen(cmd),2);
+			free(cmd);			
+			printf("------------------------------------djts start.\n");
+			sleep(5);
+			
+			//判断对焦调试是否成功
+			int zoomfocus_count = 0;
+			if(access("/tmp/param/zoomfocuspos.info",F_OK) == -1)
+			{
+				while(zoomfocus_count < 30)
+				{
+					sleep(10);
+					heartBeatCount = 1;
+					zoomfocus_count++;
+					printf("-------------------------------djts leaning.\n");
+					if(access("/tmp/param/zoomfocuspos.info",F_OK) == 0)
+					{
+						zoomfocus_count = 0;
+						break;
+					}
+				}
+				if(zoomfocus_count != 0)//对焦调试失败
+				{
+					//http://ivs2.carvedge.com/svr/box.php?act=d&bid=01230021704100009&ret=2			
+					char * cmd = new char[200];
+					sprintf(cmd, "/tmp/DataDisk/app/curl 'http://%s/svr/box.php?act=d&bid=%s&ret=2'", _sip.c_str(),_bid.c_str());
+					printf("cmd is %s\n",cmd);
+					writeToFile(cmd,strlen(cmd),2);
+					free(cmd);
+					djts_is_work = 0;
+					printf("---------------------------------djts fail.\n");
+				}
+			}
+			
+			if(access("/tmp/param/zoomfocuspos.info",F_OK) == 0)//对焦调试成功
+			{
+				//http://ivs2.carvedge.com/svr/box.php?act=d&bid=01230021704100009&ret=1			
+				char * cmd = new char[200];
+				sprintf(cmd, "/tmp/DataDisk/app/curl 'http://%s/svr/box.php?act=d&bid=%s&ret=1'", _sip.c_str(),_bid.c_str());
+				printf("cmd is %s\n",cmd);
+				writeToFile(cmd,strlen(cmd),2);
+				free(cmd);
+				djts_is_work = 0;
+				printf("---------------------------------djts success.\n");
+			}
+		}
+	}
+		
     //LOG("httpReq end response is %s\n",reply_.c_str());
     printf("httpReq_heartbeat close.\n");
     socket.close();   
@@ -456,7 +527,7 @@ void Hbt::capture_d()//定时巡视
 	int resetToDefaultZoom = 0;
 	for(int i = 0; i < 20; i++)
 	{
-		if(capture_work == 1)
+		if((capture_work == 1) || (djts_is_work == 1))
 			break;
 		if(zoom_cmd[i] != 0)
 		{
