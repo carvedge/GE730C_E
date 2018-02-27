@@ -45,6 +45,7 @@ void Hbt::y_handle_timeout(const boost::system::error_code& err)
 	{
 		if(zoom_is_work == 0)
 		{
+			Hbt::fisheye_capture();
 			boost::function0<void>z=boost::bind(&Hbt::httpReq_y,this);
             boost::thread thrd(z);
 		}
@@ -66,6 +67,7 @@ void Hbt::d_handle_timeout(const boost::system::error_code& err)
 	{
 		if(y_zoom_is_work == 0)
 		{
+			Hbt::fisheye_capture();
 			boost::function0<void>z=boost::bind(&Hbt::capture_d,this);
             boost::thread thrd(z);
 		}
@@ -78,9 +80,7 @@ void Hbt::d_handle_timeout(const boost::system::error_code& err)
 }
 
 void Hbt::start(const std::string& server, const std::string& port)
-{
-
-    
+{    
     server_ = server;
     port_ = port;
     timer_.expires_from_now(boost::posix_time::milliseconds(3000));
@@ -187,7 +187,7 @@ void Hbt::httpReq()
         socket.connect(*iterator++, ec);
     }
     //如果没有链接上，再次拨号 最多拨号 3次
-    static int dialog_4g = 6;
+    static int dialog_4g = 6;	//static局部变量只被初始化一次，下一次依据上一次结果值
     if(ec){
         printf("connect iterator failed,ec is %s\n", ec.message().c_str());
         //have not network connect,then per hour save preset images
@@ -334,14 +334,13 @@ void Hbt::httpReq()
 
         printf("cmd is :%s\n", scmd.str().c_str());
         writeToFile((char*)scmd.str().c_str(),strlen(scmd.str().c_str()),1);
-       
+
     }
     else if(0 == ooo){
         char * cmd = new char[100];
         sprintf(cmd,"killall 1.mod");
         writeToFile(cmd,strlen(cmd),1);
         free(cmd);
-       
     }
     //处理截图
     if (vStr[2].length() != 0)
@@ -766,6 +765,23 @@ void Hbt::httpReq_y()
     socket.close();
 }
 
+void Hbt::fisheye_capture()
+{
+	if(access("/tmp/fisheye.jpg", F_OK) == 0)
+		remove("/tmp/fisheye.jpg");
+	
+	char * cmd = new char[200];
+	sprintf(cmd, "/tmp/DataDisk/app/curl -o /tmp/fisheye.jpg 'http://192.168.0.40/snapshot.jpg'");
+	printf("cmd is %s\n", cmd);
+	writeToFile(cmd,strlen(cmd),2);
+	sleep(4);
+	sprintf(cmd, "/tmp/DataDisk/app/curl -F 'dat=@/tmp/fisheye.jpg' 'http://%s:1936/svr/box.php?act=g&bid=%s&pre=0&flg=2'", _sip.c_str(),_bid.c_str());
+	printf("cmd is %s\n",cmd);
+	writeToFile(cmd,strlen(cmd),2);
+	free(cmd);
+	sleep(4);
+}
+
 void Hbt::httpNotifyClose(){
     //LOG("httpReq 0");
     /* ******************************************************** */
@@ -986,13 +1002,13 @@ void Hbt::handle_timeout(const boost::system::error_code& err)
     else  
     {
         //LOG("hbt timer 0");
-        
+
         if (heartBeatCount++ < 5 || vidState == 1)
         {
             UARTSendData(4);
 			printf("\n --------------------sendData 4 ----------------- \n");
-            boost::function0<void>f=boost::bind(&Hbt::httpReq,this);
-            boost::thread thrd(f); 
+			boost::function0<void>f=boost::bind(&Hbt::httpReq,this);
+			boost::thread thrd(f); 
         }
         else{
             if (!isConnected)

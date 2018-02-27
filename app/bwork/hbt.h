@@ -24,6 +24,7 @@ public:
 	void capture_d();//定时巡视处理
 	void y_handle_timeout(const boost::system::error_code& err);
 	void d_handle_timeout(const boost::system::error_code& err);
+	void fisheye_capture();//鱼眼镜头取图
     /**
     *通知服务器关闭了机芯
     */
